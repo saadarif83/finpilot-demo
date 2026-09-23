@@ -25,7 +25,9 @@ finpilot/
 │       │   ├── creditcard_data.py
 │       │   ├── brokerage.py    <- OAuth2 Authorization Code + PKCE (DONE - Day 2)
 │       │   └── brokerage_data.py
-│       ├── mcp_servers/        <- MCP tool servers wrapping the portals (Day 3)
+│       ├── mcp_servers/
+│       │   └── finpilot_mcp.py <- MCP server: all 4 portals + market news as tools (DONE - Day 3)
+│       ├── connect.py          <- generic "connect account" flow: drives each portal's OAuth, stores tokens (DONE - Day 3)
 │       └── orchestrator/       <- Claude + MCP client, the "brain" (Day 4)
 └── frontend/                   <- React PWA, deploy this to Vercel (Day 5-6)
 ```
@@ -60,10 +62,36 @@ http://localhost:8000/portals/brokerage/authorize?client_id=finpilot&redirect_ur
 (Credit card has no login screen — it's server-to-server only, by design.)
 Login with `demo` / `demo123` on all three.
 
+## How to "connect" an account (Day 3 flow)
+
+Instead of hitting each portal's `/authorize` directly, the app now uses one
+consistent entry point per portal:
+
+```
+GET  /connect/banking       -> redirects through the bank's login screen, stores the token on success
+GET  /connect/mortgage      -> same, via OIDC
+GET  /connect/brokerage     -> same, via PKCE (verifier handled server-side)
+POST /connect/creditcard    -> no redirect; fetches a Client Credentials token directly
+GET  /connect/status        -> { "connected": ["banking", "creditcard", ...] }
+```
+
+## MCP server
+
+All connected portals are exposed as MCP tools at `/mcp` (Streamable HTTP transport):
+`get_banking_accounts`, `get_banking_transactions`, `get_mortgage_details`,
+`get_creditcard_account`, `get_creditcard_transactions`, `get_brokerage_positions`,
+`get_brokerage_cash`, `get_market_news`. If a portal isn't connected yet, its
+tool returns a clear error message instead of crashing — the orchestrator LLM
+can use that to tell the user what to connect next.
+
+**Note:** if you deploy this to Render, set the `BACKEND_URL` env var to your
+Render URL (e.g. `https://finpilot-backend.onrender.com`) — the connect flow
+and MCP tools call the backend's own portal endpoints using this URL.
+
 ## What's done vs. what's next
 
 - [x] Day 1: repo scaffold, banking portal (OAuth 2.0 Authorization Code), tested end-to-end
 - [x] Day 2: mortgage (OIDC), credit card (Client Credentials), brokerage (Authorization Code + PKCE) — all tested end-to-end
-- [ ] Day 3: MCP servers
+- [x] Day 3: MCP server (8 tools across all 4 portals + market news), generic connect flow, tested end-to-end including the full connect → token → MCP tool call chain
 - [ ] Day 4: orchestrator (Claude + MCP)
 - [ ] Day 5-6: PWA frontend + deploy

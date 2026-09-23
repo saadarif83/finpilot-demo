@@ -16,4 +16,9 @@ class Settings:
     # Frontend URL, used for CORS. Set to your Vercel URL in production.
     FRONTEND_ORIGIN: str = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 
+    # This backend's own public URL — used when it calls its own portal
+    # endpoints as if they were external services. Set this to your Render
+    # URL (e.g. https://finpilot-backend.onrender.com) once deployed.
+    BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
+
 settings = Settings()
