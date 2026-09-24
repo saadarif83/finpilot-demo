@@ -3,7 +3,7 @@ Shared helpers for issuing and verifying access tokens.
 
 Every simulated portal (banking, mortgage, credit card, brokerage) uses these
 so the *pattern* is identical, even though the auth *flow* in front of it
-differs per portal (Authorization Code, OIDC, Client Credentials, etc).
+differs per portal (Authorization Code, OIDC, Client Credentials, PKCE).
 This mirrors how real fintech APIs almost always land on a signed bearer
 token at the end, no matter how you got there.
 """
@@ -17,8 +17,8 @@ from app.core.config import settings
 def create_access_token(subject: str, portal: str, scope: str = "read", expires_in: int = 3600) -> str:
     now = int(time.time())
     payload = {
-        "sub": subject,          # the "user" this token represents
-        "portal": portal,        # which simulated portal issued it (banking, mortgage, ...)
+        "sub": subject,
+        "portal": portal,
         "scope": scope,
         "iat": now,
         "exp": now + expires_in,

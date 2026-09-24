@@ -1,13 +1,8 @@
 """
 SIMULATED BROKERAGE PORTAL
 Auth mechanism: OAuth 2.0 Authorization Code Grant + PKCE (Proof Key for Code
-Exchange). This is the required pattern for "public clients" — apps like
-FinPilot that run on a user's device and can't safely hold a client_secret.
-Instead of a secret, the client proves it's the same app that started the
-flow by generating a random `code_verifier`, sending its hash (`code_challenge`)
-up front, and revealing the original verifier only at token exchange time.
-Also shows an explicit per-scope consent screen (checkboxes), matching how
-real brokerages/Open Banking UIs let users pick exactly what to share.
+Exchange) — the required pattern for "public clients" (apps like FinPilot
+that run on a user's device and can't safely hold a client_secret).
 """
 import time
 import uuid
@@ -15,8 +10,11 @@ import hashlib
 import base64
 from fastapi import APIRouter, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import BaseModel
 from app.core.security import create_access_token, require_bearer_token
-from app.portals.brokerage_data import POSITIONS, CASH_BALANCE
+from app.portals.brokerage_data import (
+    POSITIONS, CASH_BALANCE, PERFORMANCE_HISTORY, total_positions_value, withdraw_cash, deposit_cash,
+)
 from app.portals.banking_data import DEMO_USER  # reuse same demo creds
 
 router = APIRouter(prefix="/portals/brokerage", tags=["brokerage"])
@@ -57,7 +55,7 @@ def authorize_screen(client_id: str, redirect_uri: str, code_challenge: str, cod
           <b>{client_id}</b> is requesting:
           <label><input type="checkbox" checked disabled /> View positions</label>
           <label><input type="checkbox" checked disabled /> View cash balance</label>
-          <label><input type="checkbox" disabled /> Place trades (not requested)</label>
+          <label><input type="checkbox" checked disabled /> Withdraw cash (for advisor-directed transfers)</label>
         </div>
         <form method="post" action="/portals/brokerage/authorize">
           <input type="hidden" name="redirect_uri" value="{redirect_uri}" />
@@ -111,13 +109,11 @@ def exchange_token(
     if entry["redirect_uri"] != redirect_uri:
         raise HTTPException(400, "redirect_uri_mismatch")
 
-    # THE PKCE CHECK: no client_secret involved. We hash the verifier the
-    # client reveals now and confirm it matches the challenge sent up front.
     if _b64url_sha256(code_verifier) != entry["code_challenge"]:
         raise HTTPException(400, "invalid_grant: PKCE verification failed")
 
     del _AUTH_CODES[code]
-    token = create_access_token(subject=entry["user"], portal="brokerage", scope="positions.read cash.read")
+    token = create_access_token(subject=entry["user"], portal="brokerage", scope="positions.read cash.read cash.write")
     return {"access_token": token, "token_type": "bearer", "expires_in": 3600}
 
 
@@ -129,3 +125,36 @@ def get_positions(claims: dict = Depends(require_bearer_token("brokerage"))):
 @router.get("/api/cash")
 def get_cash(claims: dict = Depends(require_bearer_token("brokerage"))):
     return {"cash": CASH_BALANCE}
+
+
+@router.get("/api/performance")
+def get_performance(claims: dict = Depends(require_bearer_token("brokerage"))):
+    """Total portfolio value over time, for the dashboard drill-down chart."""
+    return {"history": PERFORMANCE_HISTORY, "current_positions_value": total_positions_value()}
+
+
+class WithdrawRequest(BaseModel):
+    amount: float
+
+
+@router.post("/api/withdraw")
+def withdraw(body: WithdrawRequest, claims: dict = Depends(require_bearer_token("brokerage"))):
+    """Withdraw settled cash. WRITE endpoint — intentionally NOT exposed as an
+    MCP tool. Only /actions/execute calls this, after explicit user confirmation."""
+    if body.amount <= 0:
+        raise HTTPException(400, "amount must be positive")
+    try:
+        updated = withdraw_cash(body.amount)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {"cash": updated}
+
+
+@router.post("/api/deposit")
+def deposit(body: WithdrawRequest, claims: dict = Depends(require_bearer_token("brokerage"))):
+    """Deposit settled cash — used for real deposits and as the compensating
+    action if a paired write (e.g. a credit card payment) fails partway
+    through a multi-portal action. Also intentionally NOT an MCP tool."""
+    if body.amount <= 0:
+        raise HTTPException(400, "amount must be positive")
+    return {"cash": deposit_cash(body.amount)}

@@ -1,23 +1,27 @@
 import { useState, useRef, useEffect } from "react";
-import { sendChatMessage } from "../api";
+import { streamChat } from "../api";
+import ActivityFeed from "./ActivityFeed";
+import ProposalCard from "./ProposalCard";
 
 const SUGGESTED = [
   "Should I take this vacation?",
   "Should I make an extra mortgage payment to reduce my total interest?",
   "Where should my idle cash go?",
+  "Should I pay down my credit card with brokerage cash?",
 ];
 
-export default function ChatScreen() {
+export default function ChatScreen({ onActionExecuted }) {
   const [messages, setMessages] = useState([
     { role: "assistant", text: "Hi, I'm FinPilot. Connect your accounts, then ask me anything about your finances." },
   ]);
   const [input, setInput] = useState("");
+  const [liveSteps, setLiveSteps] = useState([]);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, liveSteps]);
 
   async function handleSend(text) {
     const messageText = text ?? input;
@@ -25,13 +29,26 @@ export default function ChatScreen() {
     setMessages((m) => [...m, { role: "user", text: messageText }]);
     setInput("");
     setLoading(true);
+    setLiveSteps([]);
+
     try {
-      const result = await sendChatMessage(messageText);
-      setMessages((m) => [...m, { role: "assistant", text: result.reply, toolCalls: result.tool_calls }]);
+      await streamChat(messageText, (event) => {
+        if (event.type === "final") {
+          setMessages((m) => [...m, { role: "assistant", text: event.reply, toolCalls: event.tool_calls, proposal: event.proposal }]);
+          setLoading(false);
+          setLiveSteps([]);
+        } else if (event.type === "error") {
+          setMessages((m) => [...m, { role: "assistant", text: `⚠️ ${event.message}`, isError: true }]);
+          setLoading(false);
+          setLiveSteps([]);
+        } else {
+          setLiveSteps((s) => [...s, event]);
+        }
+      });
     } catch (err) {
       setMessages((m) => [...m, { role: "assistant", text: `⚠️ ${err.message}`, isError: true }]);
-    } finally {
       setLoading(false);
+      setLiveSteps([]);
     }
   }
 
@@ -41,19 +58,10 @@ export default function ChatScreen() {
         {messages.map((m, i) => (
           <div key={i} className={`bubble ${m.role} ${m.isError ? "error" : ""}`}>
             {m.text}
-            {m.toolCalls && m.toolCalls.length > 0 && (
-              <details className="tool-trace">
-                <summary>🔧 {m.toolCalls.length} tool call{m.toolCalls.length > 1 ? "s" : ""}</summary>
-                {m.toolCalls.map((tc, j) => (
-                  <div key={j} className="tool-call-item">
-                    <code>{tc.tool}</code>
-                  </div>
-                ))}
-              </details>
-            )}
+            {m.proposal && <ProposalCard proposal={m.proposal} onExecuted={onActionExecuted} />}
           </div>
         ))}
-        {loading && <div className="bubble assistant loading">FinPilot is checking your accounts…</div>}
+        {loading && <ActivityFeed steps={liveSteps} active={true} />}
         <div ref={bottomRef} />
       </div>
 

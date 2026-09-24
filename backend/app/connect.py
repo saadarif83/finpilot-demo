@@ -1,10 +1,10 @@
 """
 Generic "connect an account" flow. The PWA links to GET /connect/{portal},
 which redirects the user's browser to that portal's own login/consent
-screen (built in Day 1-2). Once the user approves, the portal redirects back
-here, and THIS backend exchanges the code for a token server-side and stores
-it in the token vault — exactly how a real aggregator (e.g. Plaid) works
-from the app's point of view.
+screen. Once the user approves, the portal redirects back here, and THIS
+backend exchanges the code for a token server-side and stores it in the
+token vault — exactly how a real aggregator (e.g. Plaid) works from the
+app's point of view.
 """
 import time
 import uuid
@@ -19,14 +19,13 @@ from app.core import token_store
 
 router = APIRouter(prefix="/connect", tags=["connect"])
 
-# portal -> whether it needs PKCE, and whether it's an OIDC portal (returns id_token)
 PORTAL_CONFIG = {
     "banking": {"pkce": False, "oidc": False},
     "mortgage": {"pkce": False, "oidc": True},
     "brokerage": {"pkce": True, "oidc": False},
 }
 
-_pending_states: dict[str, dict] = {}  # state -> {portal, code_verifier}
+_pending_states: dict[str, dict] = {}
 
 
 def _b64url_sha256(verifier: str) -> str:
@@ -48,6 +47,7 @@ def start_connect(portal: str):
 
     cfg = PORTAL_CONFIG[portal]
     state = str(uuid.uuid4())
+    # Public, browser-facing URL — the user's browser must be able to reach this.
     redirect_uri = f"{settings.BACKEND_URL}/connect/{portal}/callback"
     pending = {"portal": portal, "expires": time.time() + 600}
 
@@ -74,7 +74,9 @@ async def connect_callback(portal: str, code: str, state: str):
     if "code_verifier" in pending:
         data["code_verifier"] = pending["code_verifier"]
 
-    # Internal call: use localhost, not the public URL (see INTERNAL_URL comment in config.py)
+    # Internal, server-to-server call: use INTERNAL_URL (localhost), never
+    # BACKEND_URL — a service calling its own public hostname is unreliable
+    # on many hosts (Render included).
     async with httpx.AsyncClient() as client:
         resp = await client.post(f"{settings.INTERNAL_URL}/portals/{portal}/token", data=data)
     if resp.status_code != 200:
@@ -94,8 +96,7 @@ async def connect_callback(portal: str, code: str, state: str):
 
 @router.post("/creditcard")
 async def connect_creditcard():
-    """Credit card uses Client Credentials — no user redirect needed, so this
-    is a plain POST FinPilot's backend makes on its own behalf."""
+    """Credit card uses Client Credentials — no user redirect needed."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             f"{settings.INTERNAL_URL}/portals/creditcard/token",

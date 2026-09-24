@@ -1,13 +1,12 @@
 """
 Holds the access token FinPilot obtained for each portal once the user
-completed that portal's auth flow. This is intentionally a simple in-memory
-dict — the demo has exactly one user and no persistence requirement. In a
-real product this would be a per-user, encrypted, database-backed vault.
+completed that portal's auth flow. Intentionally simple/in-memory — the demo
+has exactly one user and no persistence requirement, and resets on every
+backend restart (worth knowing for demo day: reconnect after any redeploy).
 """
 import time
 
 _tokens: dict[str, dict] = {}
-# shape: { "banking": {"access_token": "...", "obtained_at": 123, "id_token": "..." }, ... }
 
 
 def set_token(portal: str, access_token: str, id_token: str | None = None):

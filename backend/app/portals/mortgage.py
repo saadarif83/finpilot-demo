@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from jose import jwt
 from app.core.config import settings
 from app.core.security import create_access_token, require_bearer_token
-from app.portals.mortgage_data import DEMO_USER, LOAN
+from app.portals.mortgage_data import DEMO_USER, LOAN, AMORTIZATION_SCHEDULE
 
 router = APIRouter(prefix="/portals/mortgage", tags=["mortgage"])
 
@@ -21,8 +21,6 @@ _AUTH_CODES: dict[str, dict] = {}
 
 @router.get("/.well-known/openid-configuration")
 def oidc_discovery(request: Request):
-    """Standard OIDC discovery document — real OIDC clients fetch this first
-    to learn where to send users and how to verify tokens."""
     base = str(request.base_url).rstrip("/") + "/portals/mortgage"
     return {
         "issuer": base,
@@ -102,9 +100,6 @@ def exchange_token(grant_type: str = Form(...), code: str = Form(...), redirect_
 
     access_token = create_access_token(subject=entry["user"], portal="mortgage", scope=entry["scope"])
 
-    # ID token: a JWT that carries IDENTITY claims (who the user is), distinct
-    # from the access token (what the app is allowed to do). This is the
-    # defining feature of OIDC vs. plain OAuth2.
     now = int(time.time())
     id_token = jwt.encode(
         {
@@ -130,10 +125,15 @@ def exchange_token(grant_type: str = Form(...), code: str = Form(...), redirect_
 
 @router.get("/userinfo")
 def userinfo(claims: dict = Depends(require_bearer_token("mortgage"))):
-    """Standard OIDC endpoint: given a valid access token, return identity info."""
     return {"sub": claims["sub"], "name": "Demo User", "email": "demo@example.com"}
 
 
 @router.get("/api/loan")
 def get_loan(claims: dict = Depends(require_bearer_token("mortgage"))):
     return {"loan": LOAN}
+
+
+@router.get("/api/amortization")
+def get_amortization(claims: dict = Depends(require_bearer_token("mortgage"))):
+    """Principal vs interest per year, for the dashboard drill-down chart."""
+    return {"schedule": AMORTIZATION_SCHEDULE}

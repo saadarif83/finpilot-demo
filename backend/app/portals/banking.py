@@ -10,18 +10,15 @@ import uuid
 from fastapi import APIRouter, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from app.core.security import create_access_token, require_bearer_token
-from app.portals.banking_data import DEMO_USER, ACCOUNTS, TRANSACTIONS
+from app.portals.banking_data import DEMO_USER, ACCOUNTS, TRANSACTIONS, get_cashflow_by_month
 
 router = APIRouter(prefix="/portals/banking", tags=["banking"])
 
-# In-memory store of issued auth codes: code -> {redirect_uri, state, expires}
 _AUTH_CODES: dict[str, dict] = {}
 
 
 @router.get("/authorize", response_class=HTMLResponse)
 def authorize_screen(client_id: str, redirect_uri: str, state: str = ""):
-    """Step 1: the bank's own login + consent page. This is what a user would
-    see if FinPilot redirected them to their bank to grant access."""
     return f"""
     <html><head><title>SecureBank — Sign in</title>
     <style>
@@ -61,8 +58,6 @@ def authorize_submit(
     state: str = Form(""),
     client_id: str = Form(...),
 ):
-    """Step 2: verify credentials, issue a short-lived authorization code,
-    redirect back to FinPilot with it — exactly like a real OAuth provider."""
     if username != DEMO_USER["username"] or password != DEMO_USER["password"]:
         return HTMLResponse("<h3>Invalid credentials. Go back and try demo / demo123.</h3>", status_code=401)
 
@@ -74,8 +69,6 @@ def authorize_submit(
 
 @router.post("/token")
 def exchange_token(grant_type: str = Form(...), code: str = Form(...), redirect_uri: str = Form(...)):
-    """Step 3: FinPilot's backend exchanges the code for an access token.
-    This call happens server-to-server and is never seen by the user."""
     if grant_type != "authorization_code":
         raise HTTPException(400, "unsupported_grant_type")
     entry = _AUTH_CODES.get(code)
@@ -83,13 +76,13 @@ def exchange_token(grant_type: str = Form(...), code: str = Form(...), redirect_
         raise HTTPException(400, "invalid_grant")
     if entry["redirect_uri"] != redirect_uri:
         raise HTTPException(400, "redirect_uri_mismatch")
-    del _AUTH_CODES[code]  # codes are single-use
+    del _AUTH_CODES[code]
 
     token = create_access_token(subject=entry["user"], portal="banking")
     return {"access_token": token, "token_type": "bearer", "expires_in": 3600}
 
 
-# ---- Protected resource endpoints (what FinPilot actually calls once connected) ----
+# ---- Protected resource endpoints ----
 
 @router.get("/api/accounts")
 def get_accounts(claims: dict = Depends(require_bearer_token("banking"))):
@@ -99,3 +92,9 @@ def get_accounts(claims: dict = Depends(require_bearer_token("banking"))):
 @router.get("/api/transactions")
 def get_transactions(claims: dict = Depends(require_bearer_token("banking"))):
     return {"transactions": TRANSACTIONS}
+
+
+@router.get("/api/cashflow")
+def get_cashflow(claims: dict = Depends(require_bearer_token("banking"))):
+    """Money-in vs money-out per month, for the dashboard drill-down chart."""
+    return {"cashflow": get_cashflow_by_month()}
