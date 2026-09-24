@@ -7,6 +7,7 @@ from app.portals.mortgage import router as mortgage_router
 from app.portals.creditcard import router as creditcard_router
 from app.portals.brokerage import router as brokerage_router
 from app.connect import router as connect_router
+from app.orchestrator.router import router as orchestrator_router
 from app.mcp_servers.finpilot_mcp import mcp_app
 
 
@@ -36,6 +37,7 @@ app.include_router(mortgage_router)
 app.include_router(creditcard_router)
 app.include_router(brokerage_router)
 app.include_router(connect_router)
+app.include_router(orchestrator_router)
 app.mount("/mcp", mcp_app)
 
 

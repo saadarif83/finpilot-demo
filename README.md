@@ -28,8 +28,19 @@ finpilot/
 │       ├── mcp_servers/
 │       │   └── finpilot_mcp.py <- MCP server: all 4 portals + market news as tools (DONE - Day 3)
 │       ├── connect.py          <- generic "connect account" flow: drives each portal's OAuth, stores tokens (DONE - Day 3)
-│       └── orchestrator/       <- Claude + MCP client, the "brain" (Day 4)
-└── frontend/                   <- React PWA, deploy this to Vercel (Day 5-6)
+│       └── orchestrator/
+│           ├── agent.py        <- Claude as an MCP client, agentic tool-use loop (DONE - Day 4)
+│           └── router.py       <- POST /orchestrator/chat endpoint (DONE - Day 4)
+└── frontend/                   <- React PWA (DONE - Day 5-6), deploy to Vercel
+    ├── src/
+    │   ├── App.jsx              <- tab switcher: Accounts / Chat
+    │   ├── api.js                <- talks to the backend
+    │   └── components/
+    │       ├── ConnectScreen.jsx <- 4 portal cards with auth-mechanism badges
+    │       └── ChatScreen.jsx    <- chat UI, shows which tools got called per answer
+    └── public/
+        ├── manifest.json         <- PWA manifest (installable to home screen)
+        └── sw.js                 <- minimal service worker
 ```
 
 ## Running the backend locally
@@ -93,5 +104,33 @@ and MCP tools call the backend's own portal endpoints using this URL.
 - [x] Day 1: repo scaffold, banking portal (OAuth 2.0 Authorization Code), tested end-to-end
 - [x] Day 2: mortgage (OIDC), credit card (Client Credentials), brokerage (Authorization Code + PKCE) — all tested end-to-end
 - [x] Day 3: MCP server (8 tools across all 4 portals + market news), generic connect flow, tested end-to-end including the full connect → token → MCP tool call chain
-- [ ] Day 4: orchestrator (Claude + MCP)
-- [ ] Day 5-6: PWA frontend + deploy
+- [x] Day 4: orchestrator — Claude as a real MCP client, agentic tool-use loop, verified (schema conversion, clean error handling when key missing/bad). **You'll do the final live-response check yourself once your ANTHROPIC_API_KEY is in place.**
+- [x] Day 5-6: PWA frontend (Accounts + Chat screens), verified: builds cleanly, CORS confirmed working
+- [ ] Day 7: rehearsal — see checklist below
+
+## Deploying Day 4-6
+
+**Backend (Render) — add these env vars** to the same service from before:
+- `ANTHROPIC_API_KEY` — your key from console.anthropic.com
+- `FINNHUB_API_KEY` — optional; without it, market news uses realistic sample data (never breaks the demo)
+
+**Frontend (Vercel):**
+1. Push the `frontend/` folder to your GitHub repo the same way as before
+2. Go to vercel.com → sign in with GitHub → **Add New → Project** → select your repo
+3. **Root Directory:** `frontend`
+4. Framework preset should auto-detect as Vite
+5. Add environment variable: `VITE_BACKEND_URL` = your Render backend URL (e.g. `https://finpilot-backend.onrender.com`)
+6. Deploy — you'll get a URL like `finpilot-demo.vercel.app`
+7. **Also add `finpilot-demo.vercel.app` to the backend's `FRONTEND_ORIGIN` env var on Render** (no trailing slash), so CORS allows it — then redeploy the backend
+
+**On your phone:** open the Vercel URL in Safari/Chrome, then "Add to Home Screen" — it'll open full-screen like a real app for the demo.
+
+## Day 7 checklist — before you go on stage
+
+- [ ] Load the app on your actual demo phone, added to home screen, at least the night before
+- [ ] **Ping the Render backend 5-10 minutes before your talk** (visit its URL once) — free tier sleeps after 15 min idle and takes ~30-50s to wake, you don't want that lag live
+- [ ] Connect all 4 accounts fresh and confirm each shows "✓ Connected"
+- [ ] Run all 3 demo questions once end-to-end and time them
+- [ ] Have a **backup plan**: screen-record a successful run beforehand in case live wifi/venue network fails
+- [ ] Double check `ANTHROPIC_API_KEY` and `FRONTEND_ORIGIN`/`VITE_BACKEND_URL` are all correctly set — a typo here is the most likely last-minute breakage
+- [ ] If presenting on venue wifi, consider using your phone's hotspot instead — conference wifi is notoriously unreliable for live demos
