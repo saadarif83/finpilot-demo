@@ -25,7 +25,7 @@ async def _get(portal: str, path: str) -> dict:
     if not token:
         return {"error": f"The user has not connected their {portal} account yet. Ask them to connect it in FinPilot first."}
     async with httpx.AsyncClient() as client:
-        resp = await client.get(f"{settings.BACKEND_URL}{path}", headers={"Authorization": f"Bearer {token}"})
+        resp = await client.get(f"{settings.INTERNAL_URL}{path}", headers={"Authorization": f"Bearer {token}"})
     if resp.status_code != 200:
         return {"error": f"{portal} API returned {resp.status_code}: {resp.text}"}
     return resp.json()

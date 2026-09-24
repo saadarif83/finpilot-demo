@@ -74,8 +74,9 @@ async def connect_callback(portal: str, code: str, state: str):
     if "code_verifier" in pending:
         data["code_verifier"] = pending["code_verifier"]
 
+    # Internal call: use localhost, not the public URL (see INTERNAL_URL comment in config.py)
     async with httpx.AsyncClient() as client:
-        resp = await client.post(f"{settings.BACKEND_URL}/portals/{portal}/token", data=data)
+        resp = await client.post(f"{settings.INTERNAL_URL}/portals/{portal}/token", data=data)
     if resp.status_code != 200:
         raise HTTPException(502, f"token exchange failed: {resp.text}")
 
@@ -97,7 +98,7 @@ async def connect_creditcard():
     is a plain POST FinPilot's backend makes on its own behalf."""
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            f"{settings.BACKEND_URL}/portals/creditcard/token",
+            f"{settings.INTERNAL_URL}/portals/creditcard/token",
             data={
                 "grant_type": "client_credentials",
                 "client_id": "finpilot-backend",

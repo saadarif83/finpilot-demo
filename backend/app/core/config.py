@@ -16,9 +16,16 @@ class Settings:
     # Frontend URL, used for CORS. Set to your Vercel URL in production.
     FRONTEND_ORIGIN: str = os.getenv("FRONTEND_ORIGIN", "http://localhost:5173")
 
-    # This backend's own public URL — used when it calls its own portal
-    # endpoints as if they were external services. Set this to your Render
-    # URL (e.g. https://finpilot-backend.onrender.com) once deployed.
+    # This backend's own public URL — used ONLY for things the user's browser
+    # must reach (OAuth redirect URIs). Set this to your Render URL once deployed.
     BACKEND_URL: str = os.getenv("BACKEND_URL", "http://localhost:8000")
+
+    # This backend calling ITSELF (MCP client -> MCP server, token exchanges)
+    # must NOT go out to the public internet and back in — many platforms
+    # (Render included) don't support a service looping back to its own
+    # public hostname, which causes exactly the kind of silent connection
+    # failure this fixes. Same process, so localhost is correct and reliable.
+    PORT: str = os.getenv("PORT", "8000")
+    INTERNAL_URL: str = os.getenv("INTERNAL_URL", f"http://localhost:{PORT}")
 
 settings = Settings()

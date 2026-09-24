@@ -41,7 +41,7 @@ async def run_chat(user_message: str, max_turns: int = 6) -> dict:
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
     tool_trace: list[dict] = []
 
-    async with streamable_http_client(f"{settings.BACKEND_URL}/mcp/") as (read, write):
+    async with streamable_http_client(f"{settings.INTERNAL_URL}/mcp/") as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
             tools_result = await session.list_tools()
