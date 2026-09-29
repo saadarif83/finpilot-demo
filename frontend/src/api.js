@@ -17,6 +17,14 @@ export async function connectCreditCard() {
   return res.json();
 }
 
+// Demo shortcut: the backend runs every portal's real auth flow with the
+// saved demo credentials, so no login popups are needed on stage.
+export async function connectAllDemo() {
+  const res = await fetch(`${BACKEND_URL}/connect/demo-all`, { method: "POST" });
+  if (!res.ok) throw new Error("Failed to connect accounts");
+  return res.json();
+}
+
 export async function disconnectPortal(portal) {
   const res = await fetch(`${BACKEND_URL}/connect/${portal}/disconnect`, { method: "POST" });
   if (!res.ok) throw new Error("Failed to disconnect");

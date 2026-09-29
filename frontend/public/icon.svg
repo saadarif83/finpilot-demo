@@ -1,4 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#2f7ef7"/>
-  <text x="50%" y="58%" font-size="260" text-anchor="middle" dominant-baseline="middle">✈️</text>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f7ef7"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#0d0d16"/>
+  <rect x="48" y="48" width="416" height="416" rx="88" fill="url(#g)"/>
+  <path d="M112 330 L200 250 L262 296 L392 170" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M320 170 L392 170 L392 242" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

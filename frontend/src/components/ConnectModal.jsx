@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { openConnectPopup, connectCreditCard } from "../api";
+import { openConnectPopup, connectCreditCard, connectAllDemo } from "../api";
 
 const PORTALS = [
   { id: "banking", name: "SecureBank", icon: "🏦", auth: "OAuth 2.0 Authorization Code", color: "#2f7ef7" },
@@ -10,6 +10,27 @@ const PORTALS = [
 
 export default function ConnectModal({ connected, onStatusRefresh, onClose }) {
   const [connecting, setConnecting] = useState(null);
+  const [connectingAll, setConnectingAll] = useState(false);
+  const [allErrors, setAllErrors] = useState([]);
+
+  const allConnected = PORTALS.every((p) => connected.includes(p.id));
+
+  async function handleConnectAll() {
+    setConnectingAll(true);
+    setAllErrors([]);
+    try {
+      const { results } = await connectAllDemo();
+      const failures = Object.entries(results)
+        .filter(([, r]) => r !== "connected")
+        .map(([portal, r]) => `${portal}: ${r}`);
+      setAllErrors(failures);
+    } catch (err) {
+      setAllErrors([err.message]);
+    } finally {
+      setConnectingAll(false);
+      onStatusRefresh();
+    }
+  }
 
   async function handleConnect(portal) {
     if (portal === "creditcard") {
@@ -40,7 +61,25 @@ export default function ConnectModal({ connected, onStatusRefresh, onClose }) {
           <h2>Connected accounts</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
-        <p className="subtitle">Each portal uses a different industry-standard auth flow.</p>
+
+        <button
+          className="btn-connect-all"
+          onClick={handleConnectAll}
+          disabled={connectingAll || allConnected}
+        >
+          {allConnected
+            ? "✓ All accounts connected"
+            : connectingAll
+              ? "Connecting all accounts…"
+              : "⚡ Connect all accounts (demo login)"}
+        </button>
+        {allErrors.length > 0 && (
+          <div className="detail-error">
+            {allErrors.map((e) => <div key={e}>⚠️ {e}</div>)}
+          </div>
+        )}
+
+        <p className="subtitle">Or connect one at a time — each portal uses a different industry-standard auth flow.</p>
         <div className="portal-list">
           {PORTALS.map((p) => {
             const isConnected = connected.includes(p.id);
@@ -56,7 +95,7 @@ export default function ConnectModal({ connected, onStatusRefresh, onClose }) {
                 <button
                   className={isConnected ? "btn-connected" : "btn-connect"}
                   onClick={() => handleConnect(p.id)}
-                  disabled={connecting === p.id}
+                  disabled={connecting === p.id || connectingAll}
                 >
                   {isConnected ? "✓ Connected" : connecting === p.id ? "Connecting…" : "Connect"}
                 </button>

@@ -130,6 +130,18 @@ body {
 .detail-error, .proposal-error { color: #ff9494; padding: 12px 0; }
 
 /* Connect screen (inside modal) */
+.btn-connect-all {
+  width: 100%;
+  padding: 13px;
+  margin: 12px 0 4px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2f7ef7, #a855f7);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+}
+.btn-connect-all:disabled { opacity: 0.6; }
 .subtitle { color: #9090a5; font-size: 13px; margin-bottom: 20px; }
 .portal-list { display: flex; flex-direction: column; gap: 12px; }
 .portal-card {
