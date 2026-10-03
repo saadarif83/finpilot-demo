@@ -1,4 +1,4 @@
-# FinPilot — Conference Demo
+# FinPilot — MCP Dev Summit Demo
 
 A simulated multi-portal personal finance app. FinPilot (an LLM orchestrator)
 authenticates against 4 fake financial "portals" using different real-world
