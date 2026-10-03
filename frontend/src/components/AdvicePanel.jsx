@@ -1,48 +1,68 @@
 import { useState, useEffect, useRef } from "react";
 import { streamAdvice } from "../api";
-import ActivityFeed from "./ActivityFeed";
 import ProposalCard from "./ProposalCard";
+import { TracePanel } from "./TracePanel";
+import { toolNamesFrom } from "../trace";
 
 export default function AdvicePanel({ onClose, onActionExecuted }) {
-  const [steps, setSteps] = useState([]);
-  const [active, setActive] = useState(true);
+  const [run, setRun] = useState({ events: [], status: "running" });
+  const [showTrace, setShowTrace] = useState(true);
   const [reply, setReply] = useState(null);
   const [proposal, setProposal] = useState(null);
-  const [error, setError] = useState(null);
   const started = useRef(false);
+  const replyRef = useRef(null);
 
   useEffect(() => {
     if (started.current) return; // guard against React StrictMode double-invoke
     started.current = true;
 
+    const events = [];
     streamAdvice((event) => {
-      if (event.type === "final") {
+      if (event.type === "trace") {
+        events.push(event);
+        setRun({ events: [...events], status: "running" });
+      } else if (event.type === "final") {
+        setRun({ events: [...events], status: "done", totals: event.totals });
         setReply(event.reply);
         setProposal(event.proposal);
-        setActive(false);
       } else if (event.type === "error") {
-        setError(event.message);
-        setActive(false);
-      } else {
-        setSteps((s) => [...s, event]);
+        setRun({ events: [...events], status: "error", error: event.message });
       }
     }).catch((err) => {
-      setError(err.message);
-      setActive(false);
+      setRun({ events: [...events], status: "error", error: err.message });
     });
   }, []);
 
+  useEffect(() => {
+    if (reply) replyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [reply]);
+
+  const tools = toolNamesFrom(run.events);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-sheet advice-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>✨ Today's advice</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
-        <ActivityFeed steps={steps} active={active} />
+        {showTrace ? (
+          <TracePanel run={run} onClose={() => setShowTrace(false)} />
+        ) : (
+          <button className="trace-reopen" onClick={() => setShowTrace(true)}>
+            <span className="trace-reopen-title">
+              {run.status === "running" ? "⏳ FinPilot is working… tap to watch" : "🔍 Show how FinPilot built this"}
+            </span>
+            {tools.length > 0 && (
+              <span className="trace-reopen-tools">
+                MCP tools: {tools.map((t) => <code key={t}>{t}</code>)}
+              </span>
+            )}
+          </button>
+        )}
 
-        {error && <div className="detail-error">⚠️ {error}</div>}
+        <div ref={replyRef} />
         {reply && <div className="advice-reply">{reply}</div>}
         {proposal && <ProposalCard proposal={proposal} onExecuted={onActionExecuted} />}
       </div>

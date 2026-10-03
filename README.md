@@ -30,7 +30,7 @@ finpilot/
 │       ├── mcp_servers/
 │       │   └── finpilot_mcp.py     <- MCP server: read-only tools + the payoff proposal calculator
 │       └── orchestrator/
-│           ├── agent.py            <- Claude as an MCP client; streams progress events
+│           ├── agent.py            <- Claude as an MCP client; streams a trace event per hop
 │           └── router.py           <- /orchestrator/chat, /chat/stream, /advice/stream
 └── frontend/                        <- React PWA, deploy to Vercel
     ├── src/
@@ -41,9 +41,10 @@ finpilot/
     │       ├── Dashboard.jsx        <- single-pane-of-glass overview cards + net position
     │       ├── DetailView.jsx       <- drill-down modal, picks the right chart per account
     │       ├── charts/              <- CashflowChart, SpendingBreakdown, PerformanceChart, AmortizationChart
-    │       ├── AdvicePanel.jsx       <- "Ask FinPilot for advice" flow, live activity feed + proposal
-    │       ├── ChatScreen.jsx        <- free-form chat, same live activity feed + proposal
-    │       ├── ActivityFeed.jsx      <- live "what FinPilot is doing" step tracker (demo-friendly)
+    │       ├── AdvicePanel.jsx       <- "Ask FinPilot for advice" flow, live trace + proposal
+    │       ├── ChatScreen.jsx        <- free-form chat, trace sheet + "How FinPilot got this" card
+    │       ├── AgentTrace.jsx        <- live sequence diagram: App / Orchestrator / Claude / MCP
+    │       ├── TracePanel.jsx        <- trace header, status, close + full-screen sheet version
     │       ├── ProposalCard.jsx      <- confirm/execute UI for the agentic action
     │       └── ConnectModal.jsx      <- Connect-all button + the 4 portal connect cards
     └── public/                       <- PWA manifest, service worker, icon
@@ -130,15 +131,41 @@ This mirrors a real brokerage's "review order → confirm → execute" pattern,
 and is good material for the OAuth-security-model section of the talk: a
 model should never be one ambiguous sentence away from moving money.
 
-## Live activity feed (streaming)
+## "Under the hood" trace (live sequence diagram)
 
-`/orchestrator/chat/stream` and `/orchestrator/advice/stream` return
-Server-Sent Events, not a single JSON blob — each tool call and status update
-streams to the frontend as it happens, rendered by `ActivityFeed.jsx`. This
-is what makes the MCP architecture visible during the demo: the audience
-watches FinPilot decide which accounts to check, in real time, rather than
-staring at a spinner. If the LLM call fails mid-stream (bad key, network
-blip), it degrades to a clean `error` event, never a raw crash.
+Every advice or chat request shows a live sequence diagram of the MCP
+architecture as it runs, with four lanes: **App → Orchestrator → Claude API ↔
+MCP Server**. Each arrow is a real hop reported by the backend, not a canned
+animation:
+
+1. App → Orchestrator: `POST /orchestrator/...` (SSE stream)
+2. Orchestrator → MCP Server: `MCP initialize` (server name, protocol version)
+3. MCP Server → Orchestrator: `tools/list → 13 tools` (tap to see every name)
+4. Orchestrator → Claude: `messages.create · turn N` (question + tool schemas,
+   or the tool results being sent back)
+5. Claude → Orchestrator: `tool_use → get_banking_accounts, ...` (stop reason,
+   token counts, and what Claude said before asking)
+6. Orchestrator → MCP Server: `tools/call <real tool name>` (arguments)
+7. MCP Server → Orchestrator: result size and timing, plus which portal API and
+   which OAuth token sat behind it (tap to see the JSON)
+8. Repeat 4–7 per agent-loop turn, then Claude → `end_turn` and the answer is
+   rendered in the app
+
+A pulsing dot shows which party is busy right now ("Claude is thinking…",
+"Running get_brokerage_cash…"). When the run finishes, a footer totals Claude
+calls, MCP tool calls, tokens and wall time.
+
+- **Chat:** the trace opens as a sheet over the chat and can be closed with
+  **View answer** when complete. Each answer keeps a **🔍 How FinPilot got this**
+  card listing the real MCP tool names used; tap it to reopen that run's trace.
+- **Ask FinPilot for advice:** the trace builds at the top of the advice sheet
+  and the answer appears below it; ✕ collapses it to a one-line summary.
+
+Backend: `orchestrator/agent.py` emits `{"type": "trace", ...}` events (see
+the docstring for the shape) and a final event with `totals`. Frontend:
+`AgentTrace.jsx` (the diagram) and `TracePanel.jsx` (header, sheet wrapper).
+If the Claude call fails mid-stream, the trace ends with a red error row
+instead of a crash.
 
 ## Chart design
 
@@ -176,7 +203,8 @@ breaks CORS matching and produces double-slash API paths respectively.
 - [ ] Reconnect all 4 accounts fresh with **Connect all** (token store is
       in-memory, resets on every backend restart/redeploy)
 - [ ] Run through: Dashboard overview → drill into 2-3 accounts → tap
-      "Ask FinPilot for advice" → confirm the payoff proposal if it appears →
+      "Ask FinPilot for advice" (narrate the trace as it builds) → confirm
+      the payoff proposal if it appears →
       ask 1-2 free-form chat questions
 - [ ] Have a backup screen recording in case of venue wifi issues
 - [ ] Use your phone's hotspot instead of conference wifi if possible
